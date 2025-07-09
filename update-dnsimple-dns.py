@@ -182,7 +182,16 @@ def get_account_id(client):
 def get_existing_dns_records(client, account_id, zone_name):
     """Get existing DNS records from DNSimple for a zone"""
     try:
-        records = client.zones.list_zone_records(account_id, zone_name).data
+        # Try common method names for listing records
+        if hasattr(client.zones, 'list_records'):
+            records = client.zones.list_records(account_id, zone_name).data
+        elif hasattr(client.zones, 'records'):
+            records = client.zones.records(account_id, zone_name).data
+        elif hasattr(client.zones, 'all_records'):
+            records = client.zones.all_records(account_id, zone_name).data
+        else:
+            # Fall back to direct API call
+            records = client.zones.list_zone_records(account_id, zone_name).data
         return records
     except Exception as e:
         logger.error(f"Failed to get existing DNS records for {zone_name}: {e}")
@@ -191,7 +200,11 @@ def get_existing_dns_records(client, account_id, zone_name):
 def delete_dns_record(client, account_id, zone_name, record_id):
     """Delete DNS record from DNSimple"""
     try:
-        client.zones.delete_zone_record(account_id, zone_name, record_id)
+        # Try common method names for deleting records
+        if hasattr(client.zones, 'delete_record'):
+            client.zones.delete_record(account_id, zone_name, record_id)
+        else:
+            client.zones.delete_zone_record(account_id, zone_name, record_id)
         logger.info(f"Deleted DNS record {record_id} from zone {zone_name}")
         return True
     except Exception as e:
@@ -222,7 +235,11 @@ def create_dns_record(client, account_id, zone_name, name, ip):
             "ttl": 300  # 5 minutes TTL
         }
         
-        response = client.zones.create_zone_record(account_id, zone_name, record_data)
+        # Try common method names for creating records
+        if hasattr(client.zones, 'create_record'):
+            response = client.zones.create_record(account_id, zone_name, record_data)
+        else:
+            response = client.zones.create_zone_record(account_id, zone_name, record_data)
         logger.info(f"Successfully created DNS record: {name}.{zone_name} -> {ip}")
         return response.data
         
@@ -243,7 +260,11 @@ def update_dns_record(client, account_id, zone_name, record_id, ip):
             "ttl": 300  # 5 minutes TTL
         }
         
-        response = client.zones.update_zone_record(account_id, zone_name, record_id, record_data)
+        # Try common method names for updating records
+        if hasattr(client.zones, 'update_record'):
+            response = client.zones.update_record(account_id, zone_name, record_id, record_data)
+        else:
+            response = client.zones.update_zone_record(account_id, zone_name, record_id, record_data)
         logger.info(f"Successfully updated DNS record {record_id} -> {ip}")
         return response.data
         
