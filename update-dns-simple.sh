@@ -201,6 +201,13 @@ parse_hostname() {
         record_name=$(IFS='.'; echo "${parts[*]:0:${#parts[@]}-2}")
     fi
     
+    # Log wildcard record handling
+    if [ "$record_name" = "*" ]; then
+        log_info "Processing wildcard record for zone $zone_name"
+    elif [[ "$record_name" == \** ]]; then
+        log_info "Processing wildcard record: $record_name for zone $zone_name"
+    fi
+    
     echo "$zone_name|$record_name"
 }
 

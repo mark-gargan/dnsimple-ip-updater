@@ -39,23 +39,31 @@ def parse_hostnames():
         return []
 
 def validate_hostname(hostname):
-    """Enhanced hostname validation with security checks"""
+    """Enhanced hostname validation with security checks, including wildcard support"""
     if not hostname or len(hostname) > 253:
-        return False
-    
-    # Check for valid characters and structure
-    parts = hostname.split('.')
-    if len(parts) < 2:  # Require at least domain.tld
         return False
     
     # Check for suspicious patterns
     if hostname.startswith('.') or hostname.endswith('.') or '..' in hostname:
         return False
     
+    # Split into parts
+    parts = hostname.split('.')
+    if len(parts) < 2:  # Require at least domain.tld
+        return False
+    
     # Validate each part
-    for part in parts:
+    for i, part in enumerate(parts):
         if not part or len(part) > 63:
             return False
+        
+        # Special handling for wildcard (*) - only allowed as first part
+        if part == '*':
+            if i != 0:  # Wildcard only allowed at the beginning
+                return False
+            continue
+        
+        # Regular hostname part validation
         # Must start and end with alphanumeric
         if not part[0].isalnum() or not part[-1].isalnum():
             return False
@@ -289,7 +297,18 @@ def process_hostname(client, account_id, hostname, local_ip):
     
     # Extract zone name (last two parts for basic domains)
     zone_name = '.'.join(parts[-2:])
-    record_name = '.'.join(parts[:-2]) if len(parts) > 2 else ''
+    
+    # Handle record name, including wildcard support
+    if len(parts) > 2:
+        record_name = '.'.join(parts[:-2])
+    else:
+        record_name = ''
+    
+    # Log wildcard record creation
+    if record_name == '*':
+        logger.info(f"Creating wildcard record for zone {zone_name}")
+    elif record_name.startswith('*.'):
+        logger.info(f"Creating wildcard record: {record_name} for zone {zone_name}")
     
     # Get existing records for this zone
     existing_records = get_existing_dns_records(client, account_id, zone_name)

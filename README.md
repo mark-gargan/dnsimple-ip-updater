@@ -109,6 +109,11 @@ HOSTNAMES=myhost.example.com
 HOSTNAMES=myhost.example.com,server.example.com,api.example.com,web.example.com
 ```
 
+#### With Wildcard Support
+```bash
+HOSTNAMES=myhost.example.com,*.api.example.com,*.cdn.example.com
+```
+
 #### Home Server Services
 ```bash
 HOSTNAMES=home.example.com,plex.example.com,sonarr.example.com,radarr.example.com,sabnzbd.example.com
@@ -137,6 +142,13 @@ HOSTNAME=myhost.example.com
 DNSIMPLE_TOKEN=your_sandbox_token_here
 DNSIMPLE_SANDBOX=true
 HOSTNAME=test.example.com
+```
+
+#### Wildcard Hostname (Shell Script)
+```bash
+DNSIMPLE_TOKEN=your_api_token_here
+DNSIMPLE_SANDBOX=false
+HOSTNAME=*.api.example.com
 ```
 
 ## Management Commands
