@@ -236,18 +236,21 @@ def create_dns_record(client, account_id, zone_name, name, ip):
             logger.error(f"Invalid IP address format: {ip}")
             return False
         
-        record_data = {
-            "name": name,
-            "type": "A",
-            "content": ip,
-            "ttl": 300  # 5 minutes TTL
-        }
-        
         # Try common method names for creating records
         if hasattr(client.zones, 'create_record'):
-            response = client.zones.create_record(account_id, zone_name, record_data)
+            response = client.zones.create_record(account_id, zone_name, {
+                "name": name,
+                "type": "A",
+                "content": ip,
+                "ttl": 300
+            })
         else:
-            response = client.zones.create_zone_record(account_id, zone_name, record_data)
+            response = client.zones.create_zone_record(account_id, zone_name, {
+                "name": name,
+                "type": "A", 
+                "content": ip,
+                "ttl": 300
+            })
         logger.info(f"Successfully created DNS record: {name}.{zone_name} -> {ip}")
         return response.data
         
@@ -263,16 +266,17 @@ def update_dns_record(client, account_id, zone_name, record_id, ip):
             logger.error(f"Invalid IP address format: {ip}")
             return False
         
-        record_data = {
-            "content": ip,
-            "ttl": 300  # 5 minutes TTL
-        }
-        
         # Try common method names for updating records
         if hasattr(client.zones, 'update_record'):
-            response = client.zones.update_record(account_id, zone_name, record_id, record_data)
+            response = client.zones.update_record(account_id, zone_name, record_id, {
+                "content": ip,
+                "ttl": 300
+            })
         else:
-            response = client.zones.update_zone_record(account_id, zone_name, record_id, record_data)
+            response = client.zones.update_zone_record(account_id, zone_name, record_id, {
+                "content": ip,
+                "ttl": 300
+            })
         logger.info(f"Successfully updated DNS record {record_id} -> {ip}")
         return response.data
         
