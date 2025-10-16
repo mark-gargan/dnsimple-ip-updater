@@ -23,6 +23,7 @@ DNSIMPLE_TOKEN = os.getenv("DNSIMPLE_TOKEN")
 DNSIMPLE_ACCOUNT_ID = os.getenv("DNSIMPLE_ACCOUNT_ID")
 DNSIMPLE_SANDBOX = os.getenv("DNSIMPLE_SANDBOX", "false").lower() == "true"
 HOSTNAMES = os.getenv("HOSTNAMES")
+USE_LOCAL_IP = os.getenv("USE_LOCAL_IP", "false").lower() == "true"
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -74,13 +75,88 @@ def validate_hostname(hostname):
     
     return True
 
+def get_local_network_ip():
+    """Get the local network IP address (e.g., 192.168.x.x)."""
+    # Try platform-specific methods
+    ip = get_local_ip_linux() or get_local_ip_macos()
+    if ip:
+        return ip
+
+    logger.error("No local network IP address found on any platform")
+    return None
+
+def get_local_ip_linux():
+    """Get local network IP address on Linux."""
+    try:
+        # Get all network interfaces with their IPs
+        result = subprocess.run(['ip', 'addr', 'show'], capture_output=True, text=True, check=True)
+        lines = result.stdout.split('\n')
+
+        # Look for local network IPs (typically 192.168.x.x or 10.x.x.x)
+        for line in lines:
+            line = line.strip()
+            if line.startswith('inet ') and 'scope global' in line:
+                parts = line.split()
+                if len(parts) >= 2:
+                    ip = parts[1].split('/')[0]  # Remove CIDR notation
+                    # Prefer private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+                    if (ip.startswith('192.168.') or
+                        ip.startswith('10.') or
+                        (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)):
+                        logger.info(f"Found local network IP: {ip}")
+                        return ip
+
+        return None
+
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        logger.debug("ip command not available or failed")
+        return None
+    except Exception as e:
+        logger.debug(f"Error getting local IP on Linux: {e}")
+        return None
+
+def get_local_ip_macos():
+    """Get local network IP address on macOS."""
+    try:
+        result = subprocess.run(['ifconfig'], capture_output=True, text=True, check=True)
+        lines = result.stdout.split('\n')
+
+        current_interface = None
+        for line in lines:
+            line = line.strip()
+
+            # New interface block
+            if line and not line.startswith(' '):
+                current_interface = line.split(':')[0]
+
+            # Look for inet address
+            elif line.startswith('inet ') and current_interface:
+                parts = line.split()
+                if len(parts) >= 2:
+                    ip = parts[1]
+                    # Look for private IP ranges
+                    if (ip.startswith('192.168.') or
+                        ip.startswith('10.') or
+                        (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)):
+                        logger.info(f"Found local network IP: {ip} on interface {current_interface}")
+                        return ip
+
+        return None
+
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        logger.debug("ifconfig command not available or failed")
+        return None
+    except Exception as e:
+        logger.debug(f"Error getting local IP on macOS: {e}")
+        return None
+
 def get_ethernet_ip():
     """Get the IP address of the ethernet interface."""
     # Try platform-specific methods
     ip = get_ip_linux() or get_ip_macos()
     if ip:
         return ip
-    
+
     logger.error("No ethernet IP address found on any platform")
     return None
 
@@ -367,14 +443,22 @@ def update_dns_records():
         return False
     
     logger.info(f"Processing {len(hostnames)} hostname(s): {hostnames}")
-    
-    # Get local IP
-    local_ip = get_ethernet_ip()
-    if not local_ip:
-        logger.error("Could not determine local IP address")
-        return False
-    
-    logger.info(f"Local IP: {local_ip}")
+
+    # Get local IP based on configuration
+    if USE_LOCAL_IP:
+        logger.info("Using local network IP address")
+        local_ip = get_local_network_ip()
+        if not local_ip:
+            logger.error("Could not determine local network IP address")
+            return False
+    else:
+        logger.info("Using public-facing IP address")
+        local_ip = get_ethernet_ip()
+        if not local_ip:
+            logger.error("Could not determine local IP address")
+            return False
+
+    logger.info(f"Using IP: {local_ip}")
     
     # Process each hostname
     success_count = 0
@@ -413,16 +497,18 @@ Configuration (edit .env file to change):
 - DNSimple Token: {'[configured]' if DNSIMPLE_TOKEN else '[not configured]'}
 - Account ID: {DNSIMPLE_ACCOUNT_ID or '[auto-detected]'}
 - Sandbox Mode: {'Enabled' if DNSIMPLE_SANDBOX else 'Disabled'}
+- Use Local IP: {'Enabled (192.168.x.x)' if USE_LOCAL_IP else 'Disabled (public IP)'}
 - Hostname(s): {hostname_display}
 
 Environment Variables:
 - HOSTNAMES: Comma-separated list of hostnames
-  Examples: 
+  Examples:
     Single hostname: HOSTNAMES=myhost.example.com
     Multiple hostnames: HOSTNAMES=myhost.example.com,server.example.com,api.example.com
 - DNSIMPLE_TOKEN: Your DNSimple API token
 - DNSIMPLE_ACCOUNT_ID: Your DNSimple account ID (optional, auto-detected if not provided)
 - DNSIMPLE_SANDBOX: Set to 'true' to use sandbox environment (default: false)
+- USE_LOCAL_IP: Set to 'true' to use local network IP (e.g., 192.168.x.x) instead of public IP (default: false)
 
 Usage: {sys.argv[0]} [options]
 Options:
@@ -434,7 +520,7 @@ Options:
     if len(sys.argv) > 1 and sys.argv[1] == '--dry-run':
         logger.info("DRY RUN MODE - No changes will be made")
         hostnames = parse_hostnames()
-        local_ip = get_ethernet_ip()
+        local_ip = get_local_network_ip() if USE_LOCAL_IP else get_ethernet_ip()
         if local_ip and hostnames:
             logger.info(f"Would update {len(hostnames)} hostname(s): {hostnames}")
             for hostname in hostnames:
